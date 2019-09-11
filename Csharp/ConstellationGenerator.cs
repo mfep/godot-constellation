@@ -50,12 +50,18 @@ public class ConstellationGenerator : Node2D
         public float Radius;
     }
 
-    struct ConstellationConnection
+    struct ConstellationConnection : IComparable<ConstellationConnection>
     {
         public Constellation C1;
         public Constellation C2;
         public int I1;
         public int I2;
+        public float Distance;
+
+        public int CompareTo(ConstellationConnection other)
+        {
+            return Distance.CompareTo(other.Distance);
+        }
     }
 
     public override void _Ready()
@@ -168,7 +174,10 @@ public class ConstellationGenerator : Node2D
                 }
             }
             connectedConstellations.Add(newConnectedConstellation);
-            constellationConnections.Add(GenerateConstellationConnection(constellationToConnect, newConnectedConstellation));
+            if (!GenerateConstellationConnection(constellationToConnect, newConnectedConstellation, constellations, constellationConnections))
+            {
+                GD.PrintErr("Possibly could not connect all constellations");
+            }
         }
         return constellationConnections;
     }
@@ -186,7 +195,7 @@ public class ConstellationGenerator : Node2D
                 var centerDistance = (constellationA.Center - constellationB.Center).Length();
                 if (GD.Randf() > centerDistance / distanceThreshold)
                 {
-                    connections.Add(GenerateConstellationConnection(constellationA, constellationB));
+                    GenerateConstellationConnection(constellationA, constellationB, constellations, connections);
                 }
             }
         }
@@ -213,7 +222,30 @@ public class ConstellationGenerator : Node2D
                 }
             }
         }
-        return new ConstellationConnection { C1 = constellationA, C2 = constellationB, I1 = selectedStarA, I2 = selectedStarB };
+        return new ConstellationConnection { C1 = constellationA, C2 = constellationB, I1 = selectedStarA, I2 = selectedStarB, Distance = minStarDistance };
+    }
+
+    static bool GenerateConstellationConnection(Constellation constellationA, Constellation constellationB, List<Constellation> constellations, List<ConstellationConnection> connections)
+    {
+        var possibleConnections = new List<ConstellationConnection>();
+        for (int i = 0; i < constellationA.StarPositions.Count; i++)
+        {
+            for (int j = 0; j < constellationB.StarPositions.Count; j++)
+            {
+                var distance = (constellationA.StarPositions[i] - constellationB.StarPositions[j]).Length();
+                possibleConnections.Add(new ConstellationConnection{ C1 = constellationA, C2 = constellationB, I1 = i, I2 = j, Distance = distance });
+            }
+        }
+        possibleConnections.Sort();
+        foreach (var potentialConnection in possibleConnections)
+        {
+            if (!ConnectionIntersects(constellations, connections, potentialConnection))
+            {
+                connections.Add(potentialConnection);
+                return true;
+            }
+        }
+        return false;
     }
 
     static IEnumerable<System.Tuple<Vector2, Vector2>> EnumerateAllEdges(List<Constellation> constellations, List<ConstellationConnection> connections)
@@ -345,16 +377,20 @@ public class ConstellationGenerator : Node2D
         return connectedSets;
     }
 
+    static bool ConnectionIntersects(List<Constellation> constellations, List<ConstellationConnection> connections, ConstellationConnection potentialConnection)
+    {
+        var pos1 = potentialConnection.C1.StarPositions[potentialConnection.I1];
+        var pos2 = potentialConnection.C2.StarPositions[potentialConnection.I2];
+        return constellations.Any(constellation => constellation.Connections.Any(connection => Intersection.doIntersect(pos1, pos2, constellation.StarPositions[connection.I1], constellation.StarPositions[connection.I2], true)))
+            || connections.Any(connection => Intersection.doIntersect(pos1, pos2, connection.C1.StarPositions[connection.I1], connection.C2.StarPositions[connection.I2], true));
+    }
+
     static bool ConnectionIntersects(List<Vector2> positions, List<Connection> connections, Connection potentialConnection)
     {
         var pos1 = positions[potentialConnection.I1];
         var pos2 = positions[potentialConnection.I2];
         return connections
-            .Where(connection => connection.I1 != potentialConnection.I1
-                && connection.I2 != potentialConnection.I2
-                && connection.I1 != potentialConnection.I2
-                && connection.I2 != potentialConnection.I1)
-            .Any(connection => Intersection.doIntersect(positions[connection.I1], positions[connection.I2], pos1, pos2));
+            .Any(connection => Intersection.doIntersect(positions[connection.I1], positions[connection.I2], pos1, pos2, true));
     }
 
     static bool ConnectGroups(List<Vector2> positions, List<Connection> connections, HashSet<int> groupA, HashSet<int> groupB)

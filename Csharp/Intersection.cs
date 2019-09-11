@@ -6,6 +6,10 @@ static class Intersection
     // point q lies on line segment 'pr' 
     static bool onSegment(Vector2 p, Vector2 q, Vector2 r)
     {
+        if (r == p || r == q)
+        {
+            return false;
+        }
         if (q.x <= Mathf.Max(p.x, r.x) && q.x >= Mathf.Min(p.x, r.x) &&
             q.y <= Mathf.Max(p.y, r.y) && q.y >= Mathf.Min(p.y, r.y))
             return true;
@@ -31,8 +35,12 @@ static class Intersection
 
     // The main function that returns true if line segment 'p1q1' 
     // and 'p2q2' intersect. 
-    static public bool doIntersect(Vector2 p1, Vector2 q1, Vector2 p2, Vector2 q2)
+    static public bool doIntersect(Vector2 p1, Vector2 q1, Vector2 p2, Vector2 q2, bool dontCheckEnds = false)
     {
+        if (dontCheckEnds && (p1 == p2 || p1 == q2 || q1 == p2 || q1 == q2))
+        {
+            return false;
+        }
         // Find the four orientations needed for general and 
         // special cases 
         int o1 = orientation(p1, q1, p2);
